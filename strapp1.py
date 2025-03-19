@@ -1,5 +1,5 @@
 import streamlit as st
-import json
+import sqlite3
 import os
 from dotenv import load_dotenv
 import openai
@@ -10,6 +10,20 @@ import re
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') or st.secrets.get("OPENAI_API_KEY", None)
 openai.api_key = OPENAI_API_KEY
+
+# Initialize SQLite database
+def init_db():
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    # Create tables if they don't exist
+    c.execute('''CREATE TABLE IF NOT EXISTS vocab
+                 (word TEXT PRIMARY KEY, meaning TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_history
+                 (timestamp TEXT, topic TEXT, user_message TEXT, sensei_response TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS flashcards
+                 (word TEXT PRIMARY KEY, meaning TEXT)''')
+    conn.commit()
+    conn.close()
 
 # Chat with ChatGPT as your sensei
 def chat_with_sensei(topic, message):
@@ -23,56 +37,59 @@ def chat_with_sensei(topic, message):
     )
     return response.choices[0].message.content
 
-# Save vocabulary
+# Save vocabulary to SQLite
 def save_vocab(word, meaning):
-    vocab_file = "vocab.json"
-    vocab_data = {}
-    if os.path.exists(vocab_file):
-        try:
-            with open(vocab_file, "r", encoding="utf-8") as f:
-                vocab_data = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            vocab_data = {}
-    vocab_data[word] = meaning
-    with open(vocab_file, "w", encoding="utf-8") as f:
-        json.dump(vocab_data, f, ensure_ascii=False, indent=4)
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    # Use INSERT OR REPLACE to avoid duplicates
+    c.execute("INSERT OR REPLACE INTO vocab (word, meaning) VALUES (?, ?)", (word, meaning))
+    conn.commit()
+    conn.close()
 
-# Save chat history
+# Save chat history to SQLite
 def save_chat_history(topic, user_message, sensei_response):
-    history_file = "chat_history.json"
-    history_data = []
-    if os.path.exists(history_file):
-        try:
-            with open(history_file, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if content:
-                    f.seek(0)
-                    history_data = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            history_data = []
-    entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "topic": topic,
-        "user_message": user_message,
-        "sensei_response": sensei_response
-    }
-    history_data.append(entry)
-    with open(history_file, "w", encoding="utf-8") as f:
-        json.dump(history_data, f, ensure_ascii=False, indent=4)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO chat_history (timestamp, topic, user_message, sensei_response) VALUES (?, ?, ?, ?)",
+              (timestamp, topic, user_message, sensei_response))
+    conn.commit()
+    conn.close()
 
-# Save to flashcards
+# Save to flashcards in SQLite
 def save_to_flashcards(word, meaning):
-    flashcards_file = "flashcards.json"
-    flashcards_data = {}
-    if os.path.exists(flashcards_file):
-        try:
-            with open(flashcards_file, "r", encoding="utf-8") as f:
-                flashcards_data = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            flashcards_data = {}
-    flashcards_data[word] = meaning
-    with open(flashcards_file, "w", encoding="utf-8") as f:
-        json.dump(flashcards_data, f, ensure_ascii=False, indent=4)
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO flashcards (word, meaning) VALUES (?, ?)", (word, meaning))
+    conn.commit()
+    conn.close()
+
+# Load vocabulary from SQLite
+def load_vocab():
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    c.execute("SELECT word, meaning FROM vocab")
+    vocab_data = dict(c.fetchall())
+    conn.close()
+    return vocab_data
+
+# Load chat history from SQLite
+def load_chat_history():
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    c.execute("SELECT timestamp, topic, user_message, sensei_response FROM chat_history")
+    history_data = [{"timestamp": row[0], "topic": row[1], "user_message": row[2], "sensei_response": row[3]} for row in c.fetchall()]
+    conn.close()
+    return history_data
+
+# Load flashcards from SQLite
+def load_flashcards():
+    conn = sqlite3.connect("nihongo.db")
+    c = conn.cursor()
+    c.execute("SELECT word, meaning FROM flashcards")
+    flashcards_data = dict(c.fetchall())
+    conn.close()
+    return flashcards_data
 
 # Improved vocab detection
 def detect_vocab(text):
@@ -188,10 +205,8 @@ def studying_interface():
     
     # Review Chat History
     st.subheader("Chat History")
-    history_file = "chat_history.json"
-    if os.path.exists(history_file):
-        with open(history_file, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
+    history_data = load_chat_history()
+    if history_data:
         for entry in history_data:
             st.write(f"[{entry['timestamp']}] **Topic:** {entry['topic']}")
             st.write(f"You: {entry['user_message']}")
@@ -202,10 +217,8 @@ def studying_interface():
     
     # Review Vocabulary
     st.subheader("Vocabulary")
-    vocab_file = "vocab.json"
-    if os.path.exists(vocab_file):
-        with open(vocab_file, "r", encoding="utf-8") as f:
-            vocab_data = json.load(f)
+    vocab_data = load_vocab()
+    if vocab_data:
         for word, meaning in vocab_data.items():
             st.write(f"{word}: {meaning}")
             if st.button(f"Add '{word}' to Flashcards", key=f"flash_{word}"):
@@ -216,10 +229,8 @@ def studying_interface():
     
     # Flashcards
     st.subheader("Flashcards")
-    flashcards_file = "flashcards.json"
-    if os.path.exists(flashcards_file):
-        with open(flashcards_file, "r", encoding="utf-8") as f:
-            flashcards_data = json.load(f)
+    flashcards_data = load_flashcards()
+    if flashcards_data:
         for word, meaning in flashcards_data.items():
             with st.expander(f"{word}"):
                 st.write(f"Meaning: {meaning}")
@@ -228,6 +239,9 @@ def studying_interface():
 
 # Main App with Password Protection
 def main():
+    # Initialize the database
+    init_db()
+
     st.title("Nihongo ChatSensei")
 
     # Check if user is authenticated
