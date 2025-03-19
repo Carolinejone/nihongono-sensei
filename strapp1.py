@@ -32,7 +32,6 @@ def save_vocab(word, meaning):
             with open(vocab_file, "r", encoding="utf-8") as f:
                 vocab_data = json.load(f)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            # If file is corrupt, start fresh
             vocab_data = {}
     vocab_data[word] = meaning
     with open(vocab_file, "w", encoding="utf-8") as f:
@@ -50,7 +49,6 @@ def save_chat_history(topic, user_message, sensei_response):
                     f.seek(0)
                     history_data = json.load(f)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            # If file is corrupt, start fresh
             history_data = []
     entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -184,7 +182,7 @@ def chat_interface():
             st.session_state.vocab_saved = False
             st.session_state.last_saved_words = []
 
-# Studying Interface (unchanged)
+# Studying Interface
 def studying_interface():
     st.header("Study Zone")
     
@@ -228,9 +226,30 @@ def studying_interface():
     else:
         st.write("No flashcards yet.")
 
-# Main App
+# Main App with Password Protection
 def main():
     st.title("Nihongo ChatSensei")
+
+    # Check if user is authenticated
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    # Password prompt
+    if not st.session_state.authenticated:
+        st.write("Please enter the password to access the app.")
+        password = st.text_input("Password:", type="password")
+        correct_password = st.secrets.get("APP_PASSWORD", "default_password")  # Fallback for local testing
+
+        if st.button("Login"):
+            if password == correct_password:
+                st.session_state.authenticated = True
+                st.success("Access granted! Welcome to Nihongo ChatSensei.")
+                st.rerun()  # Refresh to show the app
+            else:
+                st.error("Incorrect password. Please try again.")
+        return  # Stop execution until authenticated
+
+    # Proceed with the app if authenticated
     if not OPENAI_API_KEY:
         st.error("OPENAI_API_KEY not set. Please configure it.")
         return
@@ -242,6 +261,9 @@ def main():
         chat_interface()
     elif page == "Study":
         studying_interface()
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
