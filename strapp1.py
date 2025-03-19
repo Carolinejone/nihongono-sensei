@@ -8,7 +8,7 @@ import re
 
 # Load environment variables
 load_dotenv()
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') or st.secrets.get("OPENAI_API_KEY", None)
 openai.api_key = OPENAI_API_KEY
 
 # Chat with ChatGPT as your sensei
@@ -28,10 +28,14 @@ def save_vocab(word, meaning):
     vocab_file = "vocab.json"
     vocab_data = {}
     if os.path.exists(vocab_file):
-        with open(vocab_file, "r") as f:
-            vocab_data = json.load(f)
+        try:
+            with open(vocab_file, "r", encoding="utf-8") as f:
+                vocab_data = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # If file is corrupt, start fresh
+            vocab_data = {}
     vocab_data[word] = meaning
-    with open(vocab_file, "w") as f:
+    with open(vocab_file, "w", encoding="utf-8") as f:
         json.dump(vocab_data, f, ensure_ascii=False, indent=4)
 
 # Save chat history
@@ -40,12 +44,13 @@ def save_chat_history(topic, user_message, sensei_response):
     history_data = []
     if os.path.exists(history_file):
         try:
-            with open(history_file, "r") as f:
+            with open(history_file, "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 if content:
                     f.seek(0)
                     history_data = json.load(f)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # If file is corrupt, start fresh
             history_data = []
     entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -54,7 +59,7 @@ def save_chat_history(topic, user_message, sensei_response):
         "sensei_response": sensei_response
     }
     history_data.append(entry)
-    with open(history_file, "w") as f:
+    with open(history_file, "w", encoding="utf-8") as f:
         json.dump(history_data, f, ensure_ascii=False, indent=4)
 
 # Save to flashcards
@@ -62,10 +67,13 @@ def save_to_flashcards(word, meaning):
     flashcards_file = "flashcards.json"
     flashcards_data = {}
     if os.path.exists(flashcards_file):
-        with open(flashcards_file, "r") as f:
-            flashcards_data = json.load(f)
+        try:
+            with open(flashcards_file, "r", encoding="utf-8") as f:
+                flashcards_data = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            flashcards_data = {}
     flashcards_data[word] = meaning
-    with open(flashcards_file, "w") as f:
+    with open(flashcards_file, "w", encoding="utf-8") as f:
         json.dump(flashcards_data, f, ensure_ascii=False, indent=4)
 
 # Improved vocab detection
@@ -184,7 +192,7 @@ def studying_interface():
     st.subheader("Chat History")
     history_file = "chat_history.json"
     if os.path.exists(history_file):
-        with open(history_file, "r") as f:
+        with open(history_file, "r", encoding="utf-8") as f:
             history_data = json.load(f)
         for entry in history_data:
             st.write(f"[{entry['timestamp']}] **Topic:** {entry['topic']}")
@@ -198,7 +206,7 @@ def studying_interface():
     st.subheader("Vocabulary")
     vocab_file = "vocab.json"
     if os.path.exists(vocab_file):
-        with open(vocab_file, "r") as f:
+        with open(vocab_file, "r", encoding="utf-8") as f:
             vocab_data = json.load(f)
         for word, meaning in vocab_data.items():
             st.write(f"{word}: {meaning}")
@@ -212,7 +220,7 @@ def studying_interface():
     st.subheader("Flashcards")
     flashcards_file = "flashcards.json"
     if os.path.exists(flashcards_file):
-        with open(flashcards_file, "r") as f:
+        with open(flashcards_file, "r", encoding="utf-8") as f:
             flashcards_data = json.load(f)
         for word, meaning in flashcards_data.items():
             with st.expander(f"{word}"):
