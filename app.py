@@ -87,7 +87,7 @@ def chat_interface():
     # Topic input (persists across reruns)
     if "topic" not in st.session_state:
         st.session_state.topic = ""
-    topic = st.text_input("Enter the topic:", value=st.session_state.topic, key="chat_topic")
+    topic = st.text_input("Enter the topic:", value=st.session_state.topic, key="chat_topic_input")
     st.session_state.topic = topic  # Save topic to session state
     
     # Initialize chat history in session state
@@ -105,8 +105,8 @@ def chat_interface():
     
     # Create a callback to handle form submission
     def handle_form_submit():
-        if st.session_state.user_message and topic:
-            user_message = st.session_state.user_message
+        if st.session_state.chat_message_input and topic:
+            user_message = st.session_state.chat_message_input
             
             # Add user message to chat
             st.session_state.chat_messages.append(("You", user_message))
@@ -127,7 +127,7 @@ def chat_interface():
                     st.session_state.last_saved_words.append((word, meaning))
             
             # Clear input after sending
-            st.session_state.user_message = ""
+            st.session_state.chat_message_input = ""
     
     # Initialize session state for vocab saving feedback
     if "vocab_saved" not in st.session_state:
@@ -140,7 +140,7 @@ def chat_interface():
         # Multi-line message input
         st.text_area(
             "You:", 
-            key="user_message", 
+            key="chat_message_input", 
             height=100,
             help="Press Enter for new line, Ctrl+Enter to send"
         )
@@ -237,10 +237,10 @@ def main():
     # Password prompt
     if not st.session_state.authenticated:
         st.write("Please enter the password to access the app.")
-        password = st.text_input("Password:", type="password")
+        password = st.text_input("Password:", type="password", key="password_input")
         correct_password = st.secrets.get("APP_PASSWORD", "default_password")  # Fallback for local testing
 
-        if st.button("Login"):
+        if st.button("Login", key="login_button"):
             if password == correct_password:
                 st.session_state.authenticated = True
                 st.success("Access granted! Welcome to Nihongo ChatSensei.")
@@ -255,15 +255,12 @@ def main():
         return
     
     # Sidebar for navigation
-    page = st.sidebar.selectbox("Choose Interface", ["Chat", "Study"])
+    page = st.sidebar.selectbox("Choose Interface", ["Chat", "Study"], key="interface_selectbox")
     
     if page == "Chat":
         chat_interface()
     elif page == "Study":
         studying_interface()
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
